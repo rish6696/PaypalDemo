@@ -3,6 +3,7 @@ const app = express();
 const ejs = require('ejs')
 const paypal = require('paypal-rest-sdk');
 const dotenv = require('dotenv');
+const request = require('request-promise');
 dotenv.config();
 
 
@@ -15,11 +16,9 @@ app.set('view engine', 'ejs')
 app.get('/', (req, res) => {
     res.render('index')
 })
-paypal.configure({
-    mode: "sandbox",
-    client_id: process.env.CLIENT_ID,
-    client_secret: process.env.CLIENT_SECRET
-})
+let envoirnment = new paypal.core.SandboxEnvironment(process.env.CLIENT_ID, process.env.CLIENT_SECRET);
+// let env = new paypal.core.LiveEnvironment('your_client_id', 'your_client_secret'); // Live account
+let client = new paypal.core.PayPalHttpClient(envoirnment);
 app.post('/pay', (req, res) => {
     const create_payment_json = {
         "intent": "sale",
@@ -47,12 +46,16 @@ app.post('/pay', (req, res) => {
             "description": "Buy a new Bmw car"
         }]
     };
-    paypal.payment.create(create_payment_json, function (error, payment) {
-        if (error) {
-            res.send(error)
-        } else {
-            res.redirect(getRedirectUrl(payment.links).href)
-        }
+
+    const payments = paypal.v1.payments;
+    let request = new payments.PaymentCreateRequest();
+    request.requestBody(create_payment_json);
+    client.execute(request).then((response) => {
+        console.log(response);
+        res.send(response)
+    }).catch((error) => {
+        console.log(error)
+        res.send(error)
     });
 })
 
@@ -66,27 +69,26 @@ app.get('/success', (req, res) => {
 
     const {
         paymentId,
-        PayerID
+        PayerID,
+        token
     } = req.query
-    const execute_payment_json = {
-        "payer_id": PayerID,
-        "transactions": [{
-            "amount": {
-                "currency": "USD",
-                "total": "25.00"
-            }
-        }]
-    };
-
-    paypal.payment.execute(paymentId, execute_payment_json, function (error, payment) {
-        if (error) {
-            console.log(error.response);
-            throw error;
-        } else {
-
-            res.send(JSON.stringify(payment));
-        }
-    });
+    request.post('https://api.sandbox.paypal.com/v1/payments/payment/' + paymentId + '/execute', {
+        auth: {
+            user: process.env.CLIENT_ID,
+            pass: process.env.CLIENT_SECRET
+        },
+        body: {
+            payer_id: PayerID,
+            transactions: [{
+                amount: {
+                    total: '25.00',
+                    currency: 'USD'
+                }
+            }]
+        },
+        json: true
+    }
+    ).then(data=>res.send(data))
 })
 
 app.get('/cancel', (req, res) => {
