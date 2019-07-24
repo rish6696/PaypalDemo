@@ -26,7 +26,7 @@ app.post('/pay', (req, res) => {
             "payment_method": "paypal"
         },
         "redirect_urls": {
-            "return_url": "http://localhost:1210/success",
+            "return_url": "http://localhost:1210/success?money=900",
             "cancel_url": "http://localhost:1210/cancel"
         },
         "transactions": [{
@@ -51,8 +51,8 @@ app.post('/pay', (req, res) => {
     let request = new payments.PaymentCreateRequest();
     request.requestBody(create_payment_json);
     client.execute(request).then((response) => {
-        console.log(response);
-        res.send(response)
+        
+        res.redirect(getRedirectUrl(response.result.links).href)
     }).catch((error) => {
         console.log(error)
         res.send(error)
@@ -66,13 +66,15 @@ function getRedirectUrl(array) {
 }
 
 app.get('/success', (req, res) => {
+    console.log(req.query)
 
     const {
         paymentId,
         PayerID,
         token
     } = req.query
-    request.post('https://api.sandbox.paypal.com/v1/payments/payment/' + paymentId + '/execute', {
+    request.post('https://api.sandbox.paypal.com/v1/payments/payment/'
+     + paymentId + '/execute', {
         auth: {
             user: process.env.CLIENT_ID,
             pass: process.env.CLIENT_SECRET
